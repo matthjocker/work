@@ -149,7 +149,14 @@ $actLog = [system.String]::Join(" ", $onlyComent)
 
 $TierQueue  = (get-scsmenumeration -ComputerName $servidorDestino| ? {$_.displayname -match $wi.TierQueue.displayname} | ? {$_.Identifier -match "incidente"}).name
 
-$status  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $wi.Status.name}).displayname
+if ($wi.Status.DisplayName -eq "En progreso"){
+
+$status = "En Curso"
+
+}else{
+
+$status  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $wi.Status.name} ).displayname
+}
 
 $clasificacion = "Pendiente de categorización"
 
