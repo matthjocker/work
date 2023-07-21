@@ -137,12 +137,12 @@ $ManualActivities | ForEach-Object {
 
 
 #region ayuda
-        $sr =  Get-SCSMObject -Class $SRclassDestino -Filter "id -eq $newSR" -ComputerName $servidorDestino
-        $ma = Get-SCSMObject -Class $MaClassDestino -Filter "id -eq $newMA" -ComputerName $servidorDestino
+        #$sr =  Get-SCSMObject -Class $SRclassDestino -Filter "id -eq $newSR" -ComputerName $servidorDestino
+        #$ma = Get-SCSMObject -Class $MaClassDestino -Filter "id -eq $newMA" -ComputerName $servidorDestino
 
        # Get-SCSMRelationshipClass -ComputerName $servidorDestino | select * | Out-GridView
 
-       $existingRelationship = Get-SCSMRelationshipObject -Relationship $relationshipClass -Source $sr  -Target $ma -ComputerName $servidorDestino
+       #$existingRelationship = Get-SCSMRelationshipObject -Relationship $relationshipClass -Source $sr  -Target $ma -ComputerName $servidorDestino
      
        $existingRelationship =  Get-SCSMRelationshipObject -BySource $sr -ComputerName $servidorDestino
 #endregion
