@@ -13,7 +13,9 @@ function Add-ActionLogEntry {
         [string] $EnteredBy,
         [parameter(Mandatory=$false, Position=4)]
         [Nullable[boolean]] $IsPrivate = $false,
-        [Parameter( Mandatory = $true , Position=4)]
+        [parameter(Mandatory=$false, Position=5)]
+        [DateTime] $EnteredDate = $false,
+        [Parameter( Mandatory = $true , Position=6)]
         [string]$server
     )
 
@@ -67,7 +69,7 @@ function Add-ActionLogEntry {
                                             $propDescriptionComment = $Comment;
                                             Title = "$($ActionEnum.DisplayName)";
                                             EnteredBy  = $EnteredBy;
-                                            EnteredDate = (Get-Date).ToUniversalTime();
+                                            EnteredDate = $EnteredDate
                                             IsPrivate = $IsPrivate;
                                         }
                     }
