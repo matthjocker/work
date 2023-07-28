@@ -2,7 +2,6 @@
 
 [Threading.Thread]::CurrentThread.CurrentCulture = 'es-ES'
 
-
 #region Usuario workflow (revisar)
 
 $ServiceUser = "trabajo\appSCSM2019ProdWFL"
@@ -88,13 +87,9 @@ $objetosFinales.count
 
 #region main
 
-$objetosFinales | select -First 1 | ForEach-Object {
+$objetosFinales[1..5] | ForEach-Object {
 
 $wi = $_
-
-$wi
-
-
 
 $log ="procesando $wi"
 write-host $log -ForegroundColor Yellow
@@ -149,14 +144,7 @@ $actLog = [system.String]::Join(" ", $onlyComent)
 
 $TierQueue  = (get-scsmenumeration -ComputerName $servidorDestino| ? {$_.displayname -match $wi.TierQueue.displayname} | ? {$_.Identifier -match "incidente"}).name
 
-if ($wi.Status.DisplayName -eq "En progreso"){
-
-$status = "En Curso"
-
-}else{
-
-$status  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $wi.Status.name} ).displayname
-}
+$status  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $wi.Status.name}).displayname
 
 $clasificacion = "Pendiente de categorización"
 

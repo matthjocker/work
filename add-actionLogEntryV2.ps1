@@ -14,7 +14,7 @@ function Add-ActionLogEntry {
         [parameter(Mandatory=$false, Position=4)]
         [Nullable[boolean]] $IsPrivate = $false,
         [parameter(Mandatory=$false, Position=5)]
-        [DateTime] $EnteredDate = $false,
+        [DateTime] $EnteredDate,
         [Parameter( Mandatory = $true , Position=6)]
         [string]$server
     )
