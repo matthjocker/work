@@ -166,8 +166,8 @@ write-host $log -ForegroundColor Yellow
 -join($wi.id, " - " ,$log ) | out-file $logPath -Append
 
 
-write-host $log -ForegroundColor Yellow
-$wi.id |out-file $logPathSoloIncidentesHijos -Append
+# write-host $log -ForegroundColor Yellow
+# $wi.id |out-file $logPathSoloIncidentesHijos -Append
 
 
 

@@ -75,13 +75,15 @@ function Add-ActionLogEntry {
                     }
     }
     #Create the projection based on the work item class
-    switch ($WIObject.ClassName)
-    {
-        "System.WorkItem.Incident" {New-SCSMObjectProjection -Type "System.WorkItem.IncidentPortalProjection$" -Projection $Projection  -ComputerName $server }
-        "System.WorkItem.ServiceRequest" {New-SCSMObjectProjection -Type "System.WorkItem.ServiceRequestProjection$" -Projection $Projection  -ComputerName $server }
-        "System.WorkItem.Problem" {New-SCSMObjectProjection -Type "System.WorkItem.Problem.ProjectionType$" -Projection $Projection  -ComputerName $server }
-        "System.WorkItem.ChangeRequest" {New-SCSMObjectProjection -Type "Cireson.ChangeRequest.ViewModel$" -Projection $Projection  -ComputerName $server }
-    }
+    # switch ($WIObject.ClassName)
+    # {
+    #     "System.WorkItem.Incident" {New-SCSMObjectProjection -Type "System.WorkItem.IncidentPortalProjection$" -Projection $Projection  -ComputerName $server }
+    #     "System.WorkItem.ServiceRequest" {New-SCSMObjectProjection -Type "System.WorkItem.ServiceRequestProjection$" -Projection $Projection  -ComputerName $server }
+    #     "System.WorkItem.Problem" {New-SCSMObjectProjection -Type "System.WorkItem.Problem.ProjectionType$" -Projection $Projection  -ComputerName $server }
+    #     "System.WorkItem.ChangeRequest" {New-SCSMObjectProjection -Type "Cireson.ChangeRequest.ViewModel$" -Projection $Projection  -ComputerName $server }
+    # }
+
+    return   $Projection 
 }
 
 <#

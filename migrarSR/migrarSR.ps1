@@ -28,7 +28,7 @@ break
 
 #region importar funciones
 
-$pathFunciones = "E:\trabajo\migrarIR\"
+$pathFunciones = "D:\Trabajo\Github Repos\SCSM\work"
 
 . $pathFunciones\get-requerimientos.ps1
 
@@ -87,7 +87,7 @@ $basePath = "C:\temp\reqExport\"
 
 $logPath ="E:\trabajo\migrarSR\logs\logs_migracionSR.txt"
 
-$objSR = get-requrimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
+$objSR = get-requerimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
 
 $objSR.count
 
@@ -104,6 +104,7 @@ $serviceRequestTypeProjectionDestino = Get-SCSMTypeProjection -name System.WorkI
 $objSR[0] | ForEach-Object {
 
 $wi = $_
+
 
 $wi.id
 
@@ -164,7 +165,10 @@ $SRproperties = @{
 
  $SRProjection = @{__CLASS = "System.WorkItem.ServiceRequest";
                  __OBJECT =   $SRproperties 
-
+                 AffectedUser =  $serviceRequestProjection.AffectedUser
+                 CreatedBy = $serviceRequestProjection.CreatedBy
+                 #ActionLog =    $serviceRequestProjection.ActionLog    
+                 AnalystCommentLog =  $output   
                 }
  
 
@@ -185,9 +189,9 @@ write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 
 #region relaciones de usuarios
 
-New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $new_SR.Object -Target $serviceRequestProjection.AffectedUser -Bulk -ComputerName $servidorDestino
+#New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $new_SR.Object -Target $serviceRequestProjection.AffectedUser -Bulk -ComputerName $servidorDestino
 
-New-SCSMRelationshipObject -RelationShip $createdByRelClass -Source $new_SR.Object -Target $serviceRequestProjection.CreatedBy -Bulk -ComputerName $servidorDestino
+#New-SCSMRelationshipObject -RelationShip $createdByRelClass -Source $new_SR.Object -Target $serviceRequestProjection.CreatedBy -Bulk -ComputerName $servidorDestino
 
 if (!($userAnalist)){
 
@@ -206,7 +210,7 @@ New-SCSMRelationshipObject -Relationship $AssignedToRel -Source $new_SR.Object -
 #endregion
 
 #region comentarios
-
+$output = @()
 $todosLosComentarios = $serviceRequestProjection.AnalystCommentLog
 
 if ($todosLosComentarios.length -ne 0){
@@ -220,7 +224,7 @@ switch ($_.ClassName)
         "System.WorkItem.TroubleTicket.UserCommentLog" {$CommentClassName = "EndUserComment"}
     }
 
-Add-ActionLogEntry -WIObject $wi -Action $CommentClassName -Comment $_.comment -EnteredDate $_.EnteredDate -EnteredBy $_.EnteredBy -IsPrivate $_.IsPrivate -server $servidorDestino
+$output += Add-ActionLogEntry -WIObject $wi -Action $CommentClassName -Comment $_.comment -EnteredDate $_.EnteredDate -EnteredBy $_.EnteredBy -IsPrivate $_.IsPrivate -server $servidorDestino
 
 }
 }else{
