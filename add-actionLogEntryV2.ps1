@@ -83,7 +83,7 @@ function Add-ActionLogEntry {
     #     "System.WorkItem.ChangeRequest" {New-SCSMObjectProjection -Type "Cireson.ChangeRequest.ViewModel$" -Projection $Projection  -ComputerName $server }
     # }
 
-    return   $Projection 
+    return   $Projection.AnalystCommentLog
 }
 
 <#

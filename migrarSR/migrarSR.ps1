@@ -168,7 +168,7 @@ $SRproperties = @{
                  AffectedUser =  $serviceRequestProjection.AffectedUser
                  CreatedBy = $serviceRequestProjection.CreatedBy
                  #ActionLog =    $serviceRequestProjection.ActionLog    
-                 AnalystCommentLog =  $output   
+                 AnalystCommentLog =   $output
                 }
  
 
