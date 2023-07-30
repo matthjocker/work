@@ -1,5 +1,5 @@
 ﻿
-function get-requrimientos{
+function get-requerimientos{
 param(
   [Parameter(Mandatory=$true)]
   [String]$servidor,
