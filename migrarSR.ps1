@@ -1,4 +1,6 @@
-﻿# https://www.stefanroth.net/2014/09/01/scsm-adding-activities-using-sma-powershell-workflow/
+﻿$start_runtime = Get-Date
+$ErrorActionPreference = "Stop"
+# https://www.stefanroth.net/2014/09/01/scsm-adding-activities-using-sma-powershell-workflow/
 # https://community.cireson.com/discussion/3486/can-you-create-a-service-request-from-another-service-request-activity
 [Threading.Thread]::CurrentThread.CurrentCulture = 'es-ES'
 import-module SMlets
@@ -22,20 +24,26 @@ break
 #>
 
 #endregion
+
+
+#region constantes
+$servidorOrigen = "scsm.ministerio.trabajo.gov.ar"
+$servidorDestino = "s1-dixx-ssm04"
+#$servidorDestino = "s1-hixx-ssm01"
+$basePath = "C:\temp\migracion\reqExport\"
+$logPath ="C:\temp\migracion\logs\logs_migracionSR.txt"
+$pathFunciones = "D:\Trabajo\Github Repos\SCSM\work\"
+$Registros_procesados_path = "C:\temp\migracion\logs\sr_procesados.txt"
+#endregion
+
+
 #region importar funciones
-$pathFunciones = "E:\trabajo\migrarIR\"
 . $pathFunciones\get-requerimientos.ps1
 . $pathFunciones\add-actionLogEntryV2.ps1
 . $pathFunciones\get-AttachReqV2.ps1
 . $pathFunciones\UploadAttachReqv2.ps1
 #endregion
-#region constantes
-$servidorOrigen = "scsm.ministerio.trabajo.gov.ar"
-$servidorDestino = "s1-dixx-ssm04"
-#$servidorDestino = "s1-hixx-ssm01"
-$basePath = "C:\temp\reqExport\"
-$logPath ="E:\trabajo\migrarSR\logs\logs_migracionSR.txt"
-#endregion
+
 #region clases
 $SRClassOrigen = Get-SCSMClass -Name System.WorkItem.ServiceRequest$ -ComputerName $servidorOrigen
 $IRclassOrigen = Get-SCSMclass -name System.Workitem.Incident$ -ComputerName $servidorOrigen 
@@ -50,9 +58,9 @@ $MAclass = Get-SCSMClass -Name System.WorkItem.Activity.ManualActivity.Extended 
 
 $AssignedToRel = get-scsmrelationshipclass -name System.WorkItemAssignedToUser$ -ComputerName $servidorOrigen
 $WorkItemAffectedUserRel = Get-SCSMRelationshipClass System.WorkItemAffectedUser$ -ComputerName $servidorOrigen
-$AssignedToUserRel = Get-scsmrelationshipclass -name System.WorkItemAssignedToUser$ -ComputerName $servidorOrigen
+$AssignedToUserRel = Get-scsmrelationshipclass -name System.WorkItemAssignedToUser$ -ComputerName $servidorOrigen
 $WorkItemAffectedUserRel = Get-SCSMRelationshipClass System.WorkItemAffectedUser$ -ComputerName $servidorOrigen
-$WorkItemContainsActivityRelOrigen = Get-scsmrelationshipclass -name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
+$WorkItemContainsActivityRelOrigen = Get-scsmrelationshipclass -name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
 $WorkItemContainsActivityRelDestino = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity$ -ComputerName $servidorDestino
 $manualActivitiesRel = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
 #Get-SCSMRelationshipClass  -ComputerName $servidorOrigen   | select * | Out-GridView
@@ -68,10 +76,27 @@ $ActivityTypeProjectionDestino = Get-SCSMTypeProjection -name System.WorkItem.Ac
 
 #endregion
 
-$objSR = get-requerimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
-$objSR.count
+#region enumeraciones
+$Enums_Servidor_Destino = get-scsmenumeration -ComputerName $servidorDestino
+#endregion
 
-$objSR | ? {$_.id -eq "SR549291"} | ForEach-Object {
+#remuevo el log de procesados si existe
+if (Test-Path $Registros_procesados_path) {
+    $Registros_procesados = Get-Content -Path $Registros_procesados_path
+    #Remove-Item $Registros_procesados_path -Force
+}
+
+
+$objSR = get-requerimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
+$objSR = $objSR | Where-Object { $_.id -notin $Registros_procesados } #filtramos aquellos registros que ya fueron copiados correctamente.
+$objSR  =  $objSR | ? {$_.id -eq "SR2121312"} 
+$SRtotal = $objSR.count
+
+$curent_count = 0
+#$objSR | ? {$_.id -eq "SR549291"} | ForEach-Object {
+$objSR  | ForEach-Object {
+$curent_count+=1
+Write-Host "Procesando $($curent_count) / $($SRtotal )"
 #region creacion SR
 $wi = $_
 $wi.id
@@ -79,24 +104,32 @@ $wi.id
 #obtengo AffectedUser, createdby , AssignedTo y comentarios, me ahorro de traer las relaciones por cada uno de los mencionados     
 $serviceRequestProjection = Get-SCSMObjectProjection -ProjectionName $serviceRequestTypeProjectionOrigen.name -filter “ID -eq $($wi.id)” -ComputerName $servidorOrigen 
 
-$SupportGroup  = ( get-scsmenumeration -ComputerName $servidorDestino |? {$_.Identifier -match "Trabajo.Solicitudes.Listas.GrupodeSoporte"} | ? {$_.displayname -match $wi.SupportGroup.displayname}  ).name
 
-$SRstatus  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $wi.Status.name}).displayname
+
+$SRstatus  = ($Enums_Servidor_Destino  |  ? {$_.name -eq  $wi.Status.name}).displayname
 
 $SRproperties = @{
-    Id             = "SR{0}"
+    Id             = $wi.Id #"SR{0}"
     Title          = $wi.title  
     Description    = $wi.Description
     Urgency        = $wi.Urgency.DisplayName
     priority       = $wi.priority.DisplayName
     Source         = "Portal de autogestión"
     Status         = $SRstatus
-    SupportGroup   = $SupportGroup
     area           = "Pendiente de categorización"
     createdDate = $wi.CreatedDate
     _Wi = $serviceRequestProjection._WI
      
 }
+
+  #Es posible que existan SR's Sin grupo de soporte asignado, si existen testeamos que el valor este en el destino y agregamos al diccionario
+  if ($wi.SupportGroup.displayname.length -gt 0) {
+
+    $SupportGroup  = ( $Enums_Servidor_Destino  |? {$_.Identifier -match "Trabajo.Solicitudes.Listas.GrupodeSoporte"} | ? {$_.displayname -match $wi.SupportGroup.displayname}  ).name
+    $SRproperties["SupportGroup"] =  $SupportGroup
+}
+
+
      $SRProjection = @{__CLASS = "System.WorkItem.ServiceRequest";
                  __OBJECT =   $SRproperties 
 
@@ -165,12 +198,12 @@ $new_SRComment = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestPr
 
 #descarga los adjuntos en la ruta $basePath con una carpeta con el nombre de $wi.id, ejemplo : c:\temp\ir0001 ,solo si contiene archivos adjuntos
 
-get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
+$descarga_realizada = get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
 
 #endregion
 
 #region upload archivos Adjuntos
-
+if ($descarga_realizada -eq $true){
    write-host "Preparando para subir archivos" -ForegroundColor Cyan
 
     $classObj = ($wi.id).substring(0, 2)
@@ -213,7 +246,7 @@ get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen
                       
                       }#finIF
 
-
+}
 #endregion
 
 #region Actividades
@@ -226,25 +259,30 @@ $ManualActivities | ForEach-Object {
 
     #$ma | select *
 
-    $MaAssignedToUser = ( Get-SCSMRelatedObject  -Relationship $AssignedToUserRel -SMObject $ma -ComputerName $servidorOrigen  ).username
+    $MaAssignedToUser = ( Get-SCSMRelatedObject  -Relationship $AssignedToUserRel -SMObject $ma -ComputerName $servidorOrigen  ).username
     
     $userAnalist = Get-SCSMObject -Class $UserClass -Filter "Username -eq $MaAssignedToUser" -ComputerName $servidorOrigen 
 
-    $SupportGroup  = ( get-scsmenumeration -ComputerName $servidorDestino| ? {$_.displayname -match $ma._TierQueue.displayname} | ? {$_.Identifier -match "actividades"}).name
 
-    $MAstatus  = ( get-scsmenumeration -ComputerName $servidorDestino |  ? {$_.name -eq  $ma.Status.name}).displayname
+    $MAstatus  = ( $Enums_Servidor_Destino |  ? {$_.name -eq  $ma.Status.name}).displayname
 
 
     $ManualActivityProperties = @{
-        Id             = "MA{0}"  #$ma.id
+        Id             = $ma.id #"MA{0}"  #$ma.id
         Title          = $ma.Title
         Description    = $ma.Description
         Status         = $MAstatus  
         #AssignedTo     = $userAnalist.DisplayName 
-        SupportGroup   = $SupportGroup
         SequenceId   =  $ma.SequenceId
     }
 
+    #Es posible que existan MA's Sin grupo de soporte asignado, si existen testeamos que el valor este en el destino y agregamos al diccionario
+    if ($ma._TierQueue.displayname.length -gt 0) {
+
+        $SupportGroup  = ( $Enums_Servidor_Destino | ? {$_.displayname -match $ma._TierQueue.displayname} | ? {$_.Identifier -match "actividades"} ).name
+        $ManualActivityProperties["SupportGroup"] =  $SupportGroup
+    }
+    
 
 
 
@@ -266,8 +304,9 @@ $ManualActivities | ForEach-Object {
     $log = "se creo la $($newMa.Object.DisplayName) -> destino $($servidorDestino) - Requerimiento: $($new_SR.Object.name)"
     write-host $log  -ForegroundColor Yellow
 
-
-
+    #Agrego el WI procesado
+    Add-Content -Path $Registros_procesados_path -Value $wi.Id
+            
 }
 
 
@@ -285,4 +324,10 @@ $ManualActivities | ForEach-Object {
 
 
 
+$end_runtime = Get-Date
 
+
+$total_runtime = $end_runtime - $start_runtime
+
+# Display the total run time in seconds
+Write-Host "Total run time: $($total_runtime.TotalMinutes) Minutes."

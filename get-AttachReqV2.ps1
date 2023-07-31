@@ -121,10 +121,10 @@ foreach ($File in $archivos_Adjuntos) {
 		# IO error, Handle it
 	}
 }
-
+return $true
 }else{
 Write-Host "No contiene archivos adjuntos, No se crea Carpeta" -ForegroundColor Green
-
+return $false
 }
 
 
