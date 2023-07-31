@@ -3,7 +3,7 @@
 function Add-ActionLogEntry {
     param (
         [parameter(Mandatory=$true, Position=0)]
-        $WIObject,
+        $ClassName,
         [parameter(Mandatory=$true, Position=1)]
         [ValidateSet("Assign","AnalystComment","Closed","Escalated","EmailSent","EndUserComment","FileAttached","FileDeleted","Reactivate","Resolved","TemplateApplied")]
         [string] $Action,
@@ -18,6 +18,7 @@ function Add-ActionLogEntry {
         [Parameter( Mandatory = $true , Position=6)]
         [string]$server
     )
+
 
     #Choose the Action Log Entry to be created. Depending on the Action Log being used, the $propDescriptionComment Property could be either Comment or Description
     switch ($Action)
@@ -35,11 +36,11 @@ function Add-ActionLogEntry {
         TemplateApplied {$CommentClass = "System.WorkItem.TroubleTicket.ActionLog"; $ActionType = "System.WorkItem.ActionLogEnum.TemplateApplied"; $ActionEnum = get-scsmenumeration $ActionType; $propDescriptionComment = "Description"}
     }
     #Alias on Type Projection for Service Requests and Problem and are singular, whereas Incident and Change Request are plural. Update $CommentClassName
-    if (($WIObject.ClassName -eq "System.WorkItem.Problem") -or ($WIObject.ClassName -eq "System.WorkItem.ServiceRequest")) {$CommentClassName = "ActionLog"} else {$CommentClassName = "ActionLogs"}
+    if (($ClassName -eq "System.WorkItem.Problem") -or ($ClassName -eq "System.WorkItem.ServiceRequest")) {$CommentClassName = "ActionLog"} else {$CommentClassName = "ActionLogs"}
     #Analyst and End User Comments Classes have different Names based on the Work Item class
     if ($Action -eq "AnalystComment")
     {
-        switch ($WIObject.ClassName)
+        switch ($ClassName)
         {
             "System.WorkItem.Incident" {$CommentClassName = "AnalystComments"}
             "System.WorkItem.ServiceRequest" {$CommentClassName = "AnalystCommentLog"}
@@ -49,7 +50,7 @@ function Add-ActionLogEntry {
     }
     if ($Action -eq "EndUserComment")
     {
-        switch ($WIObject.ClassName)
+        switch ($ClassName)
         {
             "System.WorkItem.Incident" {$CommentClassName = "UserComments"}
             "System.WorkItem.ServiceRequest" {$CommentClassName = "EndUserCommentLog"}
@@ -60,19 +61,17 @@ function Add-ActionLogEntry {
     # Generate a new GUID for the Action Log entry
     $NewGUID = ([guid]::NewGuid()).ToString()
     # Create the object projection with properties
-    $Projection = @{__CLASS = "$($WIObject.ClassName)";
-                    __SEED = $WIObject;
-                    $CommentClassName = @{__CLASS = $CommentClass;
-                                        __OBJECT = @{Id = $NewGUID;
-                                            DisplayName = $NewGUID;
-                                            ActionType = $ActionType;
-                                            $propDescriptionComment = $Comment;
-                                            Title = "$($ActionEnum.DisplayName)";
-                                            EnteredBy  = $EnteredBy;
-                                            EnteredDate = $EnteredDate
-                                            IsPrivate = $IsPrivate;
-                                        }
+    $Projection = @{__CLASS = $CommentClass;
+                    __OBJECT = @{Id = $NewGUID;
+                        DisplayName = $NewGUID;
+                        ActionType = $ActionType;
+                        $propDescriptionComment = $Comment;
+                        Title = "$($ActionEnum.DisplayName)";
+                        EnteredBy  = $EnteredBy;
+                        EnteredDate = $EnteredDate
+                        IsPrivate = $IsPrivate;
                     }
+                    
     }
 
 
@@ -89,15 +88,42 @@ function Add-ActionLogEntry {
     #>
 
 
-      switch ($WIObject.ClassName)
+      switch ($ClassName)
         {
             "System.WorkItem.Incident" {return $Projection}
-            "System.WorkItem.ServiceRequest" { return $Projection.AnalystCommentLog}
+            "System.WorkItem.ServiceRequest" { return $Projection}
            
         }
    
 }
 
+
+function Add-OperationalActionLogEntry {
+    param (
+        [parameter(Mandatory=$true, Position=0)]
+        $ActionLog,
+        [parameter(Mandatory=$true, Position=1)]
+        $servidor
+    )
+
+
+    $NewGUID = ([guid]::NewGuid()).ToString()
+    $ActionType = $ActionLog.ActionType;
+    $ActionEnum = get-scsmenumeration $ActionType -ComputerName $servidor
+    $Projection = @{__CLASS = "System.WorkItem.TroubleTicket.ActionLog";
+                        __OBJECT = @{Id = $NewGUID;
+                            DisplayName = $NewGUID;
+                            ActionType =  $ActionType
+                            Description = $ActionLog.Description;
+                            Title = "$($ActionEnum.DisplayName)";
+                            EnteredBy  = $ActionLog.EnteredBy;
+                            EnteredDate = $ActionLog.EnteredDate
+                            IsPrivate = $ActionLog.IsPrivate;
+                        }
+    
+}
+    return $Projection
+}
 <#
 
 Import-Module SMLETS

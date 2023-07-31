@@ -28,9 +28,11 @@ Function Insert-Attachment{
 
     #Check how many files were in the directory
     #Also check for any empty files?
-
+    Write-Host  $AllFiles.Count
     Foreach ( $FileObject in $AllFiles )
     {
+        try{
+        Write-Host "pase"
         #Create a filestream 
         $FileMode = [System.IO.FileMode]::Open
         $fRead = New-Object System.IO.FileStream $FileObject.FullName, $FileMode
@@ -60,31 +62,34 @@ Function Insert-Attachment{
            # $SCSMID = "ir2714"
            # $server = "s1-hixx-ssm01"
           
-        $Projection = Get-SCSMObjectProjection -ProjectionName $ProjectionType.Name -Filter "ID -eq $SCSMID" -ComputerName $server
+        $Projection = Get-SCSMObjectProjection -ProjectionName $ProjectionType.Name -Filter "ID -eq $SCSMID" -ComputerName $server 
         
         #Attach file object to Service Manager
         $Projection.__base.Add($NewFileAttach, $FileAttachmentRel.Target)
         $Projection.__base.Commit()
 
-        $SCSMGUID_ActionLog = [Guid]::NewGuid().ToString()
-        $MP = Get-SCManagementPack -Name "System.WorkItem.Library" -ComputerName $server
-        $ActionType = "System.WorkItem.ActionLogEnum.FileAttached"
-        $NewLog = New-Object Microsoft.EnterpriseManagement.Common.CreatableEnterpriseManagementObject($ManagementGroup, $ActionLogClass)
+        # $SCSMGUID_ActionLog = [Guid]::NewGuid().ToString()
+        # $MP = Get-SCManagementPack -Name "System.WorkItem.Library" -ComputerName $server
+        # $ActionType = "System.WorkItem.ActionLogEnum.FileAttached"
+        # $NewLog = New-Object Microsoft.EnterpriseManagement.Common.CreatableEnterpriseManagementObject($ManagementGroup, $ActionLogClass)
 
-        $NewLog.Item( $ActionLogClass, "Id").Value = $SCSMGUID_ActionLog
-        $NewLog.Item( $ActionLogClass, "DisplayName").Value = $SCSMGUID_ActionLog
-        $NewLog.Item( $ActionLogClass, "ActionType").Value = $MP.GetEnumerations().GetItem($ActionType)
-        $NewLog.Item( $ActionLogClass, "Title").Value = "Attached File"
-        $NewLog.Item( $ActionLogClass, "EnteredBy").Value = $EnteredBy
-        $NewLog.Item( $ActionLogClass, "Description").Value = $FileObject.Name
-        $NewLog.Item( $ActionLogClass, "EnteredDate").Value = (Get-Date).ToUniversalTime()
+        # $NewLog.Item( $ActionLogClass, "Id").Value = $SCSMGUID_ActionLog
+        # $NewLog.Item( $ActionLogClass, "DisplayName").Value = $SCSMGUID_ActionLog
+        # $NewLog.Item( $ActionLogClass, "ActionType").Value = $MP.GetEnumerations().GetItem($ActionType)
+        # $NewLog.Item( $ActionLogClass, "Title").Value = "Attached File"
+        # $NewLog.Item( $ActionLogClass, "EnteredBy").Value = $EnteredBy
+        # $NewLog.Item( $ActionLogClass, "Description").Value = $FileObject.Name
+        # $NewLog.Item( $ActionLogClass, "EnteredDate").Value = (Get-Date).ToUniversalTime()
 
-        #Insert comment to action log
-        $Projection.__base.Add($NewLog, $ActionLogRel.Target)
-        $Projection.__base.Commit()
+        # #Insert comment to action log
+        # $Projection.__base.Add($NewLog, $ActionLogRel.Target)
+        # $Projection.__base.Commit()
 
         #Cleanup
         $fRead.Close();
+    }  catch {
+        $fRead.Close();
+    }
     }
 }
 

@@ -43,6 +43,15 @@ $Registros_procesados_path = "C:\temp\migracion\logs\sr_procesados.txt"
 . $pathFunciones\add-actionLogEntryV2.ps1
 . $pathFunciones\get-AttachReqV2.ps1
 . $pathFunciones\UploadAttachReqv2.ps1
+
+Function Get-LocalTime($UTCTime)
+{
+$TZ = [System.TimeZoneInfo]::Local
+$LocalTime = [System.TimeZoneInfo]::ConvertTimeFromUtc($UTCTime, $TZ)
+Return $LocalTime
+}
+
+
 #endregion
 
 #region clases
@@ -94,8 +103,11 @@ if (Test-Path $Registros_procesados_path) {
 
 
 $objSR = get-requerimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
-$objSR = $objSR | Where-Object { $_.id -notin $Registros_procesados } #filtramos aquellos registros que ya fueron copiados correctamente.
-$objSR  =  $objSR | ? {$_.id -eq "SR2121312"} 
+#$objSR = $objSR | Where-Object { $_.id -notin $Registros_procesados } #filtramos aquellos registros que ya fueron copiados correctamente.
+#$objSR  =  $objSR | ? {$_.id -eq "SR2121312"} 
+$objSR  =  $objSR | ? {$_.id -eq "SR549291"} 
+
+
 $SRtotal = $objSR.count
 
 $curent_count = 0
@@ -124,7 +136,7 @@ $SRproperties = @{
     Source         = "Portal de autogestión"
     Status         = $SRstatus
     area           = "Pendiente de categorización"
-    createdDate = $wi.CreatedDate
+    createdDate =  $wi.CreatedDate
     _Wi = $serviceRequestProjection._WI
   
      
@@ -137,19 +149,72 @@ $SRproperties = @{
     $SRproperties["SupportGroup"] =  $SupportGroup
 }
 
+#region comentarios
+$arrayComentarios = @()
+$todosLosComentarios = $serviceRequestProjection.AnalystCommentLog
+
+if ($todosLosComentarios.length -ne 0){
+
+    $todosLosComentarios | ForEach-Object{
+
+    switch ($_.ClassName) {
+  
+        "System.WorkItem.TroubleTicket.AnalystCommentLog" {$CommentClassName = "AnalystComment"}
+        "System.WorkItem.TroubleTicket.UserCommentLog" {$CommentClassName = "EndUserComment"}
+    }
+         $arrayComentarios += Add-ActionLogEntry -ClassName "System.WorkItem.ServiceRequest" -Action $CommentClassName -Comment $_.comment -EnteredDate  $_.EnteredDate -EnteredBy $_.EnteredBy -IsPrivate $_.IsPrivate -server $servidorDestino
+
+    }
+
+}else{
+
+    $log = "No posee comentarios $($wi.id) con origen en $($servidororigen) -> destino $($servidorDestino) - Requerimiento: $($new_SR.Object.name)"
+    write-host $log  -ForegroundColor Yellow
+}
+
+
+$arrayActionLog = @()
+$todosLosActionLog = $serviceRequestProjection.ActionLog
+
+if ($todosLosActionLog.length -gt 0){
+
+    $todosLosActionLog | ForEach-Object{
+
+         $arrayActionLog += Add-OperationalActionLogEntry -actionlog $_ -servidor $servidorDestino
+
+    }
+
+}
+
+
+#     $SRProjectionComment = @{__CLASS = "System.WorkItem.ServiceRequest";
+#                  __SEED =   $new_SR.Object
+                            
+#                  AnalystCommentLog =   $arrayComentarios
+              
+#                 }
+# $new_SRComment = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjectionComment -PassThru  -ComputerName $servidorDestino # -Credential $cred
+
+
+#endregion
+
+
 
      $SRProjection = @{__CLASS = "System.WorkItem.ServiceRequest";
                  __OBJECT =   $SRproperties 
 
-                 #AffectedUser =  $serviceRequestProjection.AffectedUser
-                 #CreatedBy = $serviceRequestProjection.CreatedBy
-                # AnalystCommentLog =   $arrayComentarios
-                # AssignedTo = $serviceRequestProjection.AssignedTo
+                 AffectedUser =  $serviceRequestProjection.AffectedUser
+                 CreatedBy = $serviceRequestProjection.CreatedBy
+                 AnalystCommentLog =   $arrayComentarios
+                 AssignedTo = $serviceRequestProjection.AssignedTo
+                 ActionLog = $arrayActionLog
                 }
  
 try{
 
- New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $newReq -Target $irAffectedUser -Bulk -ComputerName $servidorDestino = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection -PassThru  -ComputerName $servidorDestino # -Credential $cred
+
+$new_SR =  New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection -PassThru  -ComputerName $servidorDestino # -Credential $cred
+
 write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 }catch{
  $Error[0].Exception 
@@ -164,56 +229,21 @@ write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 #endregion
 
 #reqgion requiredBy
+ #New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $newReq -Target $irAffectedUser -Bulk -ComputerName $servidorDestino
+
+ if ($RequiredBy.length -gt 0){
  New-SCSMRelationshipObject -RelationShip $RequestedByUserRel -Source $new_SR.Object -Target $RequiredBy -Bulk -ComputerName $servidorDestino
-
+ }
 #endregion
 
-#region comentarios
-$arrayComentarios = @()
-$todosLosComentarios = $serviceRequestProjection.AnalystCommentLog
-
-if ($todosLosComentarios.length -ne 0){
-
-    $todosLosComentarios | ForEach-Object{
-
-    switch ($_.ClassName)
-    {
-  
-        "System.WorkItem.TroubleTicket.AnalystCommentLog" {$CommentClassName = "AnalystComment"}
-        "System.WorkItem.TroubleTicket.UserCommentLog" {$CommentClassName = "EndUserComment"}
-    }
-         $arrayComentarios += Add-ActionLogEntry -WIObject $new_SR.Object -Action $CommentClassName -Comment $_.comment -EnteredDate $_.EnteredDate -EnteredBy $_.EnteredBy -IsPrivate $_.IsPrivate -server $servidorDestino
-
-    }
-
-}else{
-
-    $log = "No posee comentarios $($wi.id) con origen en $($servidororigen) -> destino $($servidorDestino) - Requerimiento: $($new_SR.Object.name)"
-    write-host $log  -ForegroundColor Yellow
-
-
-}
-
-
-
-    $SRProjectionComment = @{__CLASS = "System.WorkItem.ServiceRequest";
-                 __SEED =   $new_SR.Object
-                            
-                 AnalystCommentLog =   $arrayComentarios
-              
-                }
-$new_SRComment = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjectionComment -PassThru  -ComputerName $servidorDestino # -Credential $cred
-
-
-#endregion
 
 #region obtener adjuntos
 
 #descarga los adjuntos en la ruta $basePath con una carpeta con el nombre de $wi.id, ejemplo : c:\temp\ir0001 ,solo si contiene archivos adjuntos
 
-$descarga_realizada = get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
+# $descarga_realizada = get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
 
-#endregion
+# #endregion
 
 #region upload archivos Adjuntos
 if ($descarga_realizada -eq $true){
@@ -228,7 +258,7 @@ if ($descarga_realizada -eq $true){
 
     $AttachmentArray = $AttachmentEntries.count;
 
-                     if ($AttachmentArray -ne $NULL){
+                     if ($AttachmentArray -gt 0){
               
                           foreach($SingleAttachment in $AttachmentEntries) {
                         
@@ -272,7 +302,7 @@ $ManualActivities | ForEach-Object {
 
     #$ma | select *
 
-    $MaAssignedToUser = ( Get-SCSMRelatedObject  -Relationship $AssignedToUserRel -SMObject $ma -ComputerName $servidorOrigen  ).username
+    $MaAssignedToUser = Get-SCSMRelatedObject  -Relationship $AssignedToUserRel -SMObject $ma -ComputerName $servidorOrigen 
     
     $userAnalist = Get-SCSMObject -Class $UserClass -Filter "Username -eq $MaAssignedToUser" -ComputerName $servidorOrigen 
 
@@ -285,7 +315,6 @@ $ManualActivities | ForEach-Object {
         Title          = $ma.Title
         Description    = $ma.Description
         Status         = $MAstatus  
-        #AssignedTo     = $userAnalist.DisplayName 
         SequenceId   =  $ma.SequenceId
     }
 
@@ -317,14 +346,14 @@ $ManualActivities | ForEach-Object {
     $log = "se creo la $($newMa.Object.DisplayName) -> destino $($servidorDestino) - Requerimiento: $($new_SR.Object.name)"
     write-host $log  -ForegroundColor Yellow
 
-    #Agrego el WI procesado
-    Add-Content -Path $Registros_procesados_path -Value $wi.Id
+   
             
 }
 
 
 #endregion
-
+#Agrego el WI procesado
+Add-Content -Path $Registros_procesados_path -Value $wi.Id
 } 
 
 
