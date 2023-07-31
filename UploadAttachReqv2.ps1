@@ -15,7 +15,9 @@ Function Insert-Attachment{
         [string]$EnteredBy = $cred.UserName
       
     )
-    #Get management group
+
+
+     #Get management group
     $ManagementGroup = New-Object Microsoft.EnterpriseManagement.EnterpriseManagementGroup $server
     #Init classes
     $FileAttachmentRel = Get-SCSMRelationshipClass -Name System.WorkItemHasFileAttachment$ -ComputerName $server
@@ -28,11 +30,20 @@ Function Insert-Attachment{
 
     #Check how many files were in the directory
     #Also check for any empty files?
-    Write-Host  $AllFiles.Count
+    switch ( $tipoClase )
+    {
+
+        ir {  $ProjectionType = Get-SCSMTypeProjection -Name System.WorkItem.IncidentPortalProjection$ -ComputerName $server  }
+        sr {  $ProjectionType = Get-SCSMTypeProjection -Name System.WorkItem.ServiceRequestProjection$ -ComputerName $server   }
+
+    }
+
+    $Projection = Get-SCSMObjectProjection -ProjectionName $ProjectionType.Name -Filter "ID -eq $SCSMID" -ComputerName $server 
+        
     Foreach ( $FileObject in $AllFiles )
     {
         try{
-        Write-Host "pase"
+
         #Create a filestream 
         $FileMode = [System.IO.FileMode]::Open
         $fRead = New-Object System.IO.FileStream $FileObject.FullName, $FileMode
@@ -51,22 +62,14 @@ Function Insert-Attachment{
 
         #cambia la projection segun la clase del requerimiento
         
-        switch ( $tipoClase )
-            {
-     
-                ir {  $ProjectionType = Get-SCSMTypeProjection -Name System.WorkItem.IncidentPortalProjection$ -ComputerName $server  }
-                sr {  $ProjectionType = Get-SCSMTypeProjection -Name System.WorkItem.ServiceRequestProjection$ -ComputerName $server   }
-  
-            }
-
+   
            # $SCSMID = "ir2714"
            # $server = "s1-hixx-ssm01"
           
-        $Projection = Get-SCSMObjectProjection -ProjectionName $ProjectionType.Name -Filter "ID -eq $SCSMID" -ComputerName $server 
-        
+
         #Attach file object to Service Manager
         $Projection.__base.Add($NewFileAttach, $FileAttachmentRel.Target)
-        $Projection.__base.Commit()
+
 
         # $SCSMGUID_ActionLog = [Guid]::NewGuid().ToString()
         # $MP = Get-SCManagementPack -Name "System.WorkItem.Library" -ComputerName $server
@@ -86,11 +89,13 @@ Function Insert-Attachment{
         # $Projection.__base.Commit()
 
         #Cleanup
-        $fRead.Close();
+       # $fRead.Close();
     }  catch {
-        $fRead.Close();
+       # $fRead.Close();
     }
     }
+    $Projection.__base.Commit()
+    $fRead.Close()
 }
 
 

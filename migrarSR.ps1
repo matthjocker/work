@@ -75,6 +75,9 @@ $WorkItemContainsActivityRelDestino = Get-SCSMRelationshipClass -Name System.Wor
 $manualActivitiesRel = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
 
 $RequestedByUserRel = Get-SCSMRelationshipClass  -Name System.WorkitemRequestedbyUser -ComputerName $servidorDestino 
+$WorkitemHasParentWorkitemRel = Get-SCSMRelationshipClass -Name system.workitemhasparentworkitem -ComputerName $ServidorDestino
+$WorkItemContainsActivityRel = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity -ComputerName $ServidorDestino
+
 
 #Get-SCSMRelationshipClass  -ComputerName $servidorOrigen   | select * | Out-GridView
 
@@ -103,9 +106,9 @@ if (Test-Path $Registros_procesados_path) {
 
 
 $objSR = get-requerimientos -clase sr -status srNoCompletedCancelClosed -servidor $servidorOrigen 
-#$objSR = $objSR | Where-Object { $_.id -notin $Registros_procesados } #filtramos aquellos registros que ya fueron copiados correctamente.
+$objSR = $objSR | Where-Object { $_.id -notin $Registros_procesados } #filtramos aquellos registros que ya fueron copiados correctamente.
 #$objSR  =  $objSR | ? {$_.id -eq "SR2121312"} 
-$objSR  =  $objSR | ? {$_.id -eq "SR549291"} 
+#$objSR  =  $objSR | ? {$_.id -eq "SR549291"} 
 
 
 $SRtotal = $objSR.count
@@ -213,7 +216,7 @@ if ($todosLosActionLog.length -gt 0){
 try{
 
 
-$new_SR =  New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection -PassThru  -ComputerName $servidorDestino # -Credential $cred
+$new_SR =  New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection  -ComputerName $servidorDestino -NoCommit # -Credential $cred 
 
 write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 }catch{
@@ -232,65 +235,13 @@ write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
  #New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $newReq -Target $irAffectedUser -Bulk -ComputerName $servidorDestino
 
  if ($RequiredBy.length -gt 0){
- New-SCSMRelationshipObject -RelationShip $RequestedByUserRel -Source $new_SR.Object -Target $RequiredBy -Bulk -ComputerName $servidorDestino
+ #New-SCSMRelationshipObject -RelationShip $RequestedByUserRel -Source $new_SR.Object -Target $RequiredBy -Bulk -ComputerName $servidorDestino
+ $new_SR.Add($RequiredBy, $RequestedByUserRel.Target)
  }
 #endregion
 
+$new_SR.Commit()
 
-#region obtener adjuntos
-
-#descarga los adjuntos en la ruta $basePath con una carpeta con el nombre de $wi.id, ejemplo : c:\temp\ir0001 ,solo si contiene archivos adjuntos
-
-# $descarga_realizada = get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
-
-# #endregion
-
-#region upload archivos Adjuntos
-if ($descarga_realizada -eq $true){
-   write-host "Preparando para subir archivos" -ForegroundColor Cyan
-
-    $classObj = ($wi.id).substring(0, 2)
-
-    #ruta de la carpeta con nombre del requerimiento
-    $FullDirPath = $basePath + $wi.id + "\";
-    #obtengo el listado de los archivos descargados
-    $AttachmentEntries = [IO.Directory]::GetFiles($FullDirPath); 
-
-    $AttachmentArray = $AttachmentEntries.count;
-
-                     if ($AttachmentArray -gt 0){
-              
-                          foreach($SingleAttachment in $AttachmentEntries) {
-                        
-                                         $AttachmentSingleName = split-path $SingleAttachment -leaf
-                     
-
-                                                        if ( ( Get-SCSMObject -Class $srClassOrigen -filter "Id -eq $($wi.id)" -ComputerName $servidorOrigen | where {$_.FileAttachment -like $AttachmentSingleName} ) -eq $NULL){
-
-                                                                  Insert-Attachment -SCSMID $new_SR.Object.Name -Directory $SingleAttachment -tipoClase $classObj -server $servidorDestino
-                                                                                                                                                     
-                                                                  $log = "Subiendo $($AttachmentSingleName) de la carpeta: $($SingleAttachment) -> subido ServiceRequest with ID: $($new_SR.Object.Name) "
-                                                       
-                                                                  write-host $log -ForegroundColor Green
-                                                       
-                                                                  
-                                                        }
-                                          
-
-
-                          }#finFor
-                      
-                      }else{
-                         $log = "NO hay archivos para adjuntar"
-                                                       
-                        write-host $log -ForegroundColor Green
-                                                       
-                        -join($wi.id, "-" ,$log ) | out-file $logPath -Append
-                      
-                      }#finIF
-
-}
-#endregion
 
 #region Actividades
 
@@ -341,17 +292,81 @@ $ManualActivities | ForEach-Object {
 
 #Hago un nuevo objecto de projeccion que automaticamente aplica lo solicit-ado, podria usar -nocommit para uqe sea mas claro la ejecucion. O no.
 
-    $newMa= New-SCSMObjectProjection -Type System.WorkItem.Activity.ManualActivityProjection  -Projection $Projection -ComputerName $servidorDestino -PassThru
+    $newMa= New-SCSMObjectProjection -Type System.WorkItem.Activity.ManualActivityProjection  -Projection $Projection -ComputerName $servidorDestino  -PassThru
  
     $log = "se creo la $($newMa.Object.DisplayName) -> destino $($servidorDestino) - Requerimiento: $($new_SR.Object.name)"
     write-host $log  -ForegroundColor Yellow
 
-   
+
+  
+
             
 }
 
 
 #endregion
+
+
+
+
+
+
+#region obtener adjuntos
+
+#descarga los adjuntos en la ruta $basePath con una carpeta con el nombre de $wi.id, ejemplo : c:\temp\ir0001 ,solo si contiene archivos adjuntos
+
+$descarga_realizada = get-AttachReq -wi $wi.id -OutputFolder $basePath -servidor $servidorOrigen 
+
+# #endregion
+
+#region upload archivos Adjuntos
+if ($descarga_realizada -eq $true){
+   write-host "Preparando para subir archivos" -ForegroundColor Cyan
+
+    $classObj = ($wi.id).substring(0, 2)
+
+    #ruta de la carpeta con nombre del requerimiento
+    $FullDirPath = $basePath + $wi.id + "\";
+    #obtengo el listado de los archivos descargados
+    #$AttachmentEntries = [IO.Directory]::GetFiles($FullDirPath); 
+
+   # $AttachmentArray = $AttachmentEntries.count;
+    $existen_archivos = Test-Path ($FullDirPath + "*") 
+                    if ( $existen_archivos -eq $true){
+              
+                    #       foreach($SingleAttachment in $AttachmentEntries) {
+                        
+                    #                      $AttachmentSingleName = split-path $SingleAttachment -leaf
+                     
+
+                    # if ( ( Get-SCSMObject -Class $srClassOrigen -filter "Id -eq $($wi.id)" -ComputerName $servidorOrigen | where {$_.FileAttachment -like $AttachmentSingleName} ) -eq $NULL){
+
+                                Insert-Attachment -SCSMID $new_SR.Object.Name -Directory $FullDirPath -tipoClase $classObj -server $servidorDestino
+                                                                                                                    
+                                $log = "Subiendo $($AttachmentSingleName) de la carpeta: $($SingleAttachment) -> subido ServiceRequest with ID: $($new_SR.Object.Name) "
+                    
+                                write-host $log -ForegroundColor Green
+                    
+                                
+                    # }
+                                          
+
+
+                        #   }#finFor
+                      
+                      }else{
+                         $log = "NO hay archivos para adjuntar"
+                                                       
+                        write-host $log -ForegroundColor Green
+                                                       
+                        -join($wi.id, "-" ,$log ) | out-file $logPath -Append
+                      
+                      }#finIF
+
+}
+#endregion
+
+
 #Agrego el WI procesado
 Add-Content -Path $Registros_procesados_path -Value $wi.Id
 } 
