@@ -32,7 +32,8 @@ $servidorDestino = "s1-dixx-ssm04"
 #$servidorDestino = "s1-hixx-ssm01"
 $basePath = "C:\temp\migracion\reqExport\"
 $logPath ="C:\temp\migracion\logs\logs_migracionSR.txt"
-$pathFunciones = "D:\Trabajo\Github Repos\SCSM\work\"
+$pathFunciones = "D:\Trabajo\Github Repos\SCSM\work"
+#$pathFunciones = "E:\Trabajo\Github Repos\SCSM\work"
 $Registros_procesados_path = "C:\temp\migracion\logs\sr_procesados.txt"
 #endregion
 
@@ -63,17 +64,22 @@ $WorkItemAffectedUserRel = Get-SCSMRelationshipClass System.WorkItemAffectedUser
 $WorkItemContainsActivityRelOrigen = Get-scsmrelationshipclass -name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
 $WorkItemContainsActivityRelDestino = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity$ -ComputerName $servidorDestino
 $manualActivitiesRel = Get-SCSMRelationshipClass -Name System.WorkItemContainsActivity$  -ComputerName $servidorOrigen
+
+$RequestedByUserRel = Get-SCSMRelationshipClass  -Name System.WorkitemRequestedbyUser -ComputerName $servidorDestino 
+
 #Get-SCSMRelationshipClass  -ComputerName $servidorOrigen   | select * | Out-GridView
 
 #endregion
 #region projection
 
-$serviceRequestTypeProjectionOrigen = Get-SCSMTypeProjection -name System.WorkItem.ServiceRequestProjection$  -ComputerName $servidorOrigen 
+$serviceRequestTypeProjectionOrigen = Get-SCSMTypeProjection -name System.WorkItem.ServiceRequestProjection$   -ComputerName $servidorOrigen 
 
 $serviceRequestTypeProjectionDestino = Get-SCSMTypeProjection -name System.WorkItem.ServiceRequestProjection$  -ComputerName $servidorDestino
 
 $ActivityTypeProjectionDestino = Get-SCSMTypeProjection -name System.WorkItem.Activity.ManualActivityProjection -ComputerName $servidorOrigen 
 
+
+ #Get-SCSMTypeProjection  -ComputerName $servidorOrigen | select * | out-gridview
 #endregion
 
 #region enumeraciones
@@ -104,6 +110,7 @@ $wi.id
 #obtengo AffectedUser, createdby , AssignedTo y comentarios, me ahorro de traer las relaciones por cada uno de los mencionados     
 $serviceRequestProjection = Get-SCSMObjectProjection -ProjectionName $serviceRequestTypeProjectionOrigen.name -filter “ID -eq $($wi.id)” -ComputerName $servidorOrigen 
 
+$RequiredBy  =  Get-SCSMRelatedObject  -Relationship $RequestedByUserRel  -SMObject $wi -ComputerName $servidorOrigen
 
 
 $SRstatus  = ($Enums_Servidor_Destino  |  ? {$_.name -eq  $wi.Status.name}).displayname
@@ -119,6 +126,7 @@ $SRproperties = @{
     area           = "Pendiente de categorización"
     createdDate = $wi.CreatedDate
     _Wi = $serviceRequestProjection._WI
+  
      
 }
 
@@ -141,7 +149,7 @@ $SRproperties = @{
  
 try{
 
-$new_SR = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection -PassThru  -ComputerName $servidorDestino # -Credential $cred
+ New-SCSMRelationshipObject -RelationShip $relAffectedUser -Source $newReq -Target $irAffectedUser -Bulk -ComputerName $servidorDestino = New-SCSMObjectProjection -Type System.WorkItem.ServiceRequestProjection -Projection $SRProjection -PassThru  -ComputerName $servidorDestino # -Credential $cred
 write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 }catch{
  $Error[0].Exception 
@@ -152,6 +160,11 @@ write-host "se creo el $($new_SR.Object.name)" -ForegroundColor Yellow
 
 }
 
+
+#endregion
+
+#reqgion requiredBy
+ New-SCSMRelationshipObject -RelationShip $RequestedByUserRel -Source $new_SR.Object -Target $RequiredBy -Bulk -ComputerName $servidorDestino
 
 #endregion
 
